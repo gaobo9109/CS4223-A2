@@ -1,1 +1,1 @@
-CS4223 Assignment 2 - Implementing MESI and Dragon cache coherance protocol
+CS4223 Assignment 2 - Implementation of MESI and Dragon cache coherance protocol
