@@ -1,97 +1,90 @@
 #include "cache.h"
 
-Cache::Cache(int blockSize_, int cacheSize_, int setSize_):
-    blockSize(blockSize_),
-    cacheSize(cacheSize_),
-    setSize(setSize_)
+Cache::Cache(int cacheSize, int blockSize, int associativity)
 {
-    numBlock = cacheSize / blockSize;
-    numSet = numBlock / setSize;
+    nBlock = cacheSize / blockSize;
+    nSet = nBlock / associativity;
+    setSize = associativity;
+    blocks.resize(nSet);
 
-    for(int i=0; i<numBlock; i++)
+    //initialize cache
+    for(int i=0; i<nSet; i++)
     {
-        blocks.push_back({false,false,0,0,0});
+        std::list<CacheBlock> set;
+        blocks.push_pack(set);
     }
-
 }
 
-
-void Cache::invalidate(int tag, int setIndex)
+//check if block in cache, move the block to the front of the list if present
+bool Cache::contain(int setIndex, int tag)
 {
-    int cacheIndex = isBlockInCache(tag, setIndex);
-    blocks[cacheIndex].valid = false;
-}
+    std::list<CacheBlock>& set = blocks[setIndex];
 
-int Cache::getTagFromMemAddr(int memAddr)
-{
-    int blockIndex = memAddr / blockSize;
-    return blockIndex / numSet;
-}
-
-int Cache::getSetIndexFromMemAddr(int memAddr)
-{
-    int blockIndex = memAddr / blockSize;
-    return blockIndex % numSet;
-}
-
-int Cache::isBlockInCache(int tag, int setIndex)
-{
-    int hitIndex = -1;
-
-    //check through all cache blocks in set
-    for(int i=0; i<setSize; i++)
+    bool found = false;
+    std::list<CacheBlock>::iterator it;
+    for(it = set.begin(); it!= set.end(); ++it)
     {
-        int cacheIndex = setIndex + i * numSet;
-        if(blocks[cacheIndex].valid && blocks[cacheIndex].tag == tag)
-           hitIndex = cacheIndex;
-    }
-    return hitIndex;
-}
-
-bool addBlockToCache(int tag, int setIndex, int cycleAdded)
-{
-    int earliestCycleAdded = blocks[setIndex].cycleAdded;
-    int blockChosen = setIndex;
-    bool evict = true;
-
-    for(int i=0; i<setSize; i++)
-    {
-        int cacheIndex = setIndex + i * numSet;
-        // find the first available slot in the set
-        if(!blocks[cacheIndex].valid)
+        if(it->tag == tag && it->valid)
         {
-            blocks[cacheIndex].tag = tag;
-            blocks[cacheIndex].valid = true;
-            blocks[cacheIndex].dirty = false;
-            blocks[cacheIndex].cycleAdded = cycle;
-            evict = false;
+            found = true;
             break;
         }
-
-        else
-        {
-            // find the earliest added block to evict
-            if(blocks[cacheIndex].cycleAdded < earliestCycle)
-            {
-                earliestCycleAdded = blocks[cacheIndex].cycleAdded;
-                blockChosen = cacheIndex; 
-            }
-        }
-
     }
 
+    if(found)
+    {
+        //move the matched block to the front of the list
+        set.splice(set.begin(), set, it);
+    }
+
+    return found;
+}
+
+// assume block not in cache
+// return true if need to write dirty block to memory
+bool Cache::insert(int setIndex, int tag)
+{
+    std::list<CacheBlock>& set = blocks[setIndex];
+    CacheBlock block = {false, true, tag, 0};
     bool writeBack = false;
 
-    if(evict)
+    if(set.size() < setSize)
     {
-        if(blocks[blockChosen].dirty)
-            writeBack = true;
-
-        blocks[blockChosen].dirty = false;
-        blocks[blockChosen].valid = true;
-        blocks[blockChosen].tag = tag;
-        blocks[blockChosen].cycleAdded = cycle;
+        set.push_front(block);
     }
-
+    else
+    {
+        writeBack = set.end()->valid && set.end()->dirty;
+        set.pop_back();
+        set.push_front(block);
+    }
+    
     return writeBack;
 }
+
+// assume block in cache and at front of the list 
+void Cache::modify(int setIndex)
+{
+    blocks[setIndex].begin()->dirty = true;
+}
+
+// assume block in cache and at front of the list
+void Cache::invalidate(int setIndex)
+{
+    std::list<CacheBlock>& set = blocks[setIndex];
+    set.begin()->valid = false;
+    // move block to the end of the list to be evicted next
+    set.splice(set.end(), set, set.begin());
+}
+
+void Cache::setState(int setIndex, int state)
+{
+    blocks[setIndex].begin()->state = state;
+}
+
+int Cache::getState(int setIndex)
+{
+    return blocks[setIndex].begin()->state;
+}
+
+

@@ -6,34 +6,25 @@ struct CacheBlock
     bool dirty;
     bool valid;
     int tag;
-    int cycleAdded;
-    int state;   
+    int state;
 };
 
 class Cache
 {
 public:
-    Cache(int blockSize, int cacheSize, int setSize);
-    int read(int memAddr); //read a memory address, return cycle elapsed
-    int write(int memAddr); //write to a memory address, return cycle elapsed
-    void invalidate(int tag, int setIndex); //invalidate a cache block
-
+    Cache(int cacheSize, int blockSize, int associativity);
+    bool contain(int setIndex, int tag);
+    bool insert(int setIndex, int tag);
+    void modify(int setIndex);
+    void invalidate(int setIndex);
+    void setState(int setIndex, int state);
+    int getState(setIndex);
+        
 private:
-    std::vector<CacheBlock> blocks;
-    int blockSize;   // cache block size
-    int numBlock;    // number of cache blocks 
-    int cacheSize;   // size of cache in bytes
-    int setSize;     // number of cache blocks in each set
-    int numSet;      // number of cache sets
-
-    int getTagFromMemAddr(int memAddr);
-    int getSetIndexFromMemAddr(int memAddr);
-
-    //return cache index of the memory block, or -1 if block does not exist in cache
-    int isBlockInCache(int tag, int setIndex);
-    
-    //return true if a dirty block needs to be written to memory
-    bool addBlockToCache(int tag, int setIndex, int cycleAdded); 
+    std::vector<std::list<CacheBlock>> blocks;
+    int nBlock;
+    int nSet;
+    int setSize;
 }
 
 #endif
