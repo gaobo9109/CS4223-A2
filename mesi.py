@@ -5,7 +5,7 @@ SHARED = 'shared'
 MODIFIED = 'modified'
 EXCLUSIVE = 'exclusive'
 BUS_RD = 'BUS_RD'
-BUSR_DX = 'BUS_RDX'
+BUS_RDX = 'BUS_RDX'
 PR_RD = 'PR_RD'
 PR_RDS = 'PR_RDS'
 PR_WR = 'PR_WR'
@@ -19,8 +19,8 @@ STATE_MACHINE = {
         BUS_RDX: (INVALID, False, 0),
     },
     SHARED: {
-        PR_RD: (SHARED, None, 1),
-        PR_WR: (MODIFIED, BUS_RDX, 1),
+        PR_RD: (SHARED, None, 0),
+        PR_WR: (MODIFIED, BUS_RDX, 0),
         BUS_RD: (SHARED, False, 0),
         BUS_RDX: (INVALID, False, 0),
     },
@@ -33,19 +33,30 @@ STATE_MACHINE = {
     EXCLUSIVE: {
         PR_RD: (EXCLUSIVE, None, 0),
         PR_WR: (MODIFIED, None, 0),
-        BUS_RD: (SHARED, True, 100),
-        BUS_RDX: (INVALID, True, 100),
+        BUS_RD: (SHARED, True, 0),
+        BUS_RDX: (INVALID, True, 0),
     }
 }
 
 class MESICache(Cache):
     def __init__(self, cache_size, associativity, block_size, processor_id):
-        CacheController.__init__(cache_size, associativity, block_size, processor_id)
+        Cache.__init__(cache_size, associativity, block_size, processor_id)
         self.state_machine = STATE_MACHINE
         self.initial_state = INVALID
+        self.has_deferred_action = False
+        self.deferred_action = ()
 
-    def processor_action(self, action, addr):
+    def bus_txn_generated(self, action, addr):
         tag, set_index = self.split_addr(addr)
+        cache_state = self.cache_states[set_index]
+        state = self.initial_state
+        if cache_state.has_key(tag):
+            state = cache_state[tag]
+        return state == INVALID or (state == SHARED and action == 'w')
+
+    def cache_update(self, action, addr):
+        tag, set_index = self.split_addr(addr)
+        block_index = self.get_block_index(tag, set_index)
         cache_state = self.cache_states[set_index]
         cache_set = self.cache_sets[set_index]
         state = self.initial_state
@@ -54,30 +65,66 @@ class MESICache(Cache):
         else:
             cache_state[tag] = state
 
-        cycles = 0
-        bus_txn = None
         if action == 'r':
-            if self.shared_line.is_shared(addr):
-                next_state, bus_txn, cycles = self.state_machine[state][PR_RDS]
+            if state == INVALID and self.bus.is_shared(block_index):
+                next_state, bus_txn, blocked_cycles = self.state_machine[state][PR_RDS]
             else:
-                next_state, bus_txn, cycles = self.state_machine[state][PR_RD]
-            cache_state[tag] = next_state
+                next_state, bus_txn, blocked_cycles = self.state_machine[state][PR_RD]
 
         elif action == 'w':
-            next_state, bus_txn, cycles = self.state_machine[state][PR_WR]
+            next_state, bus_txn, blocked_cycles = self.state_machine[state][PR_WR]
+
+        evicted_tag = cache_set.memory_action(tag)
+       
+        # when there is a cache miss, wait until data is retrieved before performing cache state update
+        if blocked_cycles > 0:
+            # eviction of old block only occur when transition from INVALID -> other state
+            write_back_cycle = 100 if (evicted_tag != -1 and cache_state[evicted_tag] == MODIFIED) else 0 
+            self.has_deferred_action = True
+            self.deferred_action = (tag, set_index, next_state, bus_txn, evicted_tag, write_back_cycle) 
+        else:
             cache_state[tag] = next_state
+            self.bus.broadcast_txn(self.pid, bus_txn, tag, set_index)
+        
+        self.block_for(blocked_cycles)
 
-        evicted_tag = cache_set.mem_action(tag)
-        self.shared_line.add_shared(addr, self.pid)
+    def deferred_cache_update(self):
+        tag, set_index, next_state, bus_txn, evicted_tag, write_back_cycle = self.deferred_action
+        self.has_deferred_action = False
+        self.deferred_action = ()
+        self.cache_states[set_index][tag] = next_state
 
-        # flush the value
+        # remove evicted block from shared values
         if evicted_tag != -1:
-            if cache_state[evicted_tag] == MODIFIED:
-                cycles += 100
-            self.shared_line.remove_shared(self.get_addr(evicted_tag, set_index), self.pid)
-            cache_state.pop(tag)
+            evicted_block_index = self.get_block_index(evicted_tag, set_index)
+            self.bus.remove_shared(evicted_block_index, self.pid)
 
-        return bus_txn, cycles
+        self.bus.broadcast_txn(self.pid, bus_txn, tag, set_index)
+        self.block_for(write_back_cycle)
 
-    def bus_action(self, bus_txn):
+    def bus_update(self, txn_type, tag, set_index):
+        cache_state = self.cache_states[set_index]
+        if cache_state.has_key(tag):
+            curr_state = cache_state[tag]
+            next_state, block_bus, write_back_cycle = self.state_machine[curr_state][txn_type]
+            cache_state[tag] = next_state
+            self.block_for(write_back_cycle)
+
+            block_bus_cycle = 0
+            if block_bus:
+                block_bus_cycle = self.cache_transfer_cycle
+            return block_bus_cycle
+
+        return 0
+                
+
+
+
+
+
+
+
+
+
+
 

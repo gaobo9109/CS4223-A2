@@ -12,10 +12,10 @@ class CacheSet:
         block = self.members.pop(index)
         self.members.append(block)
 
-    def mem_action(self, tag):
+    def memory_action(self, tag):
         evicted_tag = -1
         if tag in self.members:
-            idx = self.members.index(value)
+            idx = self.members.index(tag)
             self.bring_to_front(idx)
         else:
             if len(self.members) == self.set_size:
@@ -34,11 +34,22 @@ class Cache:
     def __init__(self, cache_size, associativity, block_size, processor_id):
         self.num_set = cache_size // block_size // self.set_size 
         self.block_size = block_size
+        self.cache_transfer_cycle = self.block_size // 4 * 2
         self.pid = processor_id
-        self.cache = Cache(cache_size, associativity, block_size)
         self.cache_states = [{} for i in range(self.num_set)]
         self.cache_sets = [CacheSet(associativity, i) for i in range(self.num_set)]
         self.blocked_cycle = 0
+
+    def tick(self):
+        if self.blocked_cycle == 0 or self.blocked_cycle == 1:
+            self.blocked_cycle = 0
+            return False
+        else:
+            self.blocked_cycle -= 1
+            return True
+
+    def block_for(self, num_cycle):
+        self.blocked_cycle = num_cycle
 
     def split_addr(self, addr):
         block_index = addr // self.block_size
@@ -46,14 +57,27 @@ class Cache:
         set_index = block_index % self.num_set
         return tag, set_index
 
-    def get_addr(self, tag, set_index):
+    def get_block_index(self, tag, set_index):
         return (tag * self.num_set + set_index) * self.block_size
 
-    def set_shared_line(self, shared_line):
-        self.shared_line = shared_line
+    def set_bus(self, bus):
+        self.bus = bus
 
-    def tick(self):
+    # override these functions
+
+    def cache_update(self, action, addr):
         pass
+
+    def deferred_cache_update(self):
+        pass
+
+    def bus_update(self, txn_type, tag, set_index):
+        pass
+
+    def bus_txn_generated(self, action, addr):
+        pass
+
+
 
 
 

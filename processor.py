@@ -9,24 +9,28 @@ class Processor:
         self.finished = False
         self.pid = processor_id
         self.blocked_cycle = 0
-        self.total_cycle = 0
-
 
     def tick(self):
-        if self.blocked_cycle > 0:
+        if self.blocked_cycle == 0 or self.blocked_cycle == 1:
+            self.blocked_cycle = 0
+            return False
+        else:
             self.blocked_cycle -= 1
-            self.total_cycle += 1
-            return
+            return True
 
-        elif self.instr_index >= self.instr_count:
+    def execute_instr(self):
+        if self.instr_index >= self.instr_count:
             print("processor {} is done".format(self.pid))
             self.finished = True
-            return
+            return None
 
         label, value = self.instr[self.instr_index]
         self.instr_index += 1
-        self.total_cycle += 1
         return label, value
+
+    def stall_instr(self):
+        if self.instr_index > 0:
+            self.instr_index -= 1
 
     def block_for(self, num_cycles):
         self.blocked_cycle += num_cycles
