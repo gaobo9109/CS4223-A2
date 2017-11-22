@@ -32,8 +32,9 @@ class CacheSet:
 
 class Cache:
     def __init__(self, cache_size, associativity, block_size, processor_id):
-        self.num_set = cache_size // block_size // self.set_size 
+        self.num_set = cache_size // block_size // associativity
         self.block_size = block_size
+        self.set_size = associativity
         self.cache_transfer_cycle = self.block_size // 4 * 2
         self.pid = processor_id
         self.cache_states = [{} for i in range(self.num_set)]
@@ -60,7 +61,7 @@ class Cache:
     def get_block_index(self, tag, set_index):
         return (tag * self.num_set + set_index) * self.block_size
 
-    def set_bus(self, bus):
+    def set_shared_bus(self, bus):
         self.bus = bus
 
     # override these functions

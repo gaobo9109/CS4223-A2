@@ -4,7 +4,7 @@ class Processor:
     def __init__(self, input_file, processor_id, cache):
         self.cache = cache
         self.instr = read_instruction(input_file, processor_id)
-        self.instr_count = len(self.instructions)
+        self.instr_count = len(self.instr)
         self.instr_index = 0
         self.finished = False
         self.pid = processor_id
@@ -25,7 +25,9 @@ class Processor:
             return None
 
         label, value = self.instr[self.instr_index]
+        print("processor {} is at instruction {}".format(self.pid, self.instr_index))
         self.instr_index += 1
+
         return label, value
 
     def stall_instr(self):
