@@ -2,6 +2,7 @@ from processor import Processor
 from mesi import MESICache
 # from dragon import DragonCache
 from bus import Bus
+import time
 
 LOAD = 0
 STORE = 1
@@ -23,6 +24,7 @@ class Simulator:
     def run(self):
         done = [False for i in range(4)]
 
+        start = time.time()
         while not all(done):
             bus_blocked = self.bus.tick()
             for p in self.processors:
@@ -39,11 +41,6 @@ class Simulator:
 
                 # cache retrieving data from main memory
                 if cache_blocked:
-                    continue
-
-                # cache done retrieving data, updating cache state
-                if cache.has_deferred_action:
-                    cache.deferred_cache_update()
                     continue
 
                 res = p.execute_instr()
@@ -65,15 +62,18 @@ class Simulator:
 
                 # check if bus is blocked and current instruction generate bus transaction 
                 if not bus_blocked or not cache.bus_txn_generated(action, value):
-                    cache.cache_update(action, value)
+                    deferred_action = cache.cache_update(action, value)
+                    if deferred_action:
+                        p.stall_instr()
                 else:
                     p.stall_instr()
 
+        end = time.time()
+        print(end - start)
 
 
-
-# sim = Simulator('MESI', 'blackscholes', 1024, 2, 16)
-# sim.run()
+sim = Simulator('MESI', 'blackscholes', 4086, 2, 32)
+sim.run()
 
 
                 

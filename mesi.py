@@ -44,7 +44,6 @@ class MESICache(Cache):
         self.state_machine = STATE_MACHINE
         self.initial_state = INVALID
         self.has_deferred_action = False
-        self.deferred_action = ()
 
     def bus_txn_generated(self, action, addr):
         tag, set_index = self.split_addr(addr)
@@ -60,57 +59,77 @@ class MESICache(Cache):
         cache_state = self.cache_states[set_index]
         cache_set = self.cache_sets[set_index]
         state = self.initial_state
+        generate_bus_txn = True
+        bus_txn = None
 
         if tag in cache_state:
             state = cache_state[tag]
         else:
             cache_state[tag] = state
 
-        if action == 'r':
-            if state == INVALID and self.bus.is_shared(block_index):
+        # state transition 
+
+        if action == 'r' and state == INVALID:
+            shared = self.bus.is_shared(block_index)
+            
+            if shared:
                 next_state, bus_txn, blocked_cycles = self.state_machine[state][PR_RDS]
+
             else:
                 next_state, bus_txn, blocked_cycles = self.state_machine[state][PR_RD]
+
+        elif action == 'r' and state != INVALID:
+            next_state, bus_txn, blocked_cycles = self.state_machine[state][PR_RD]
 
         elif action == 'w':
             next_state, bus_txn, blocked_cycles = self.state_machine[state][PR_WR]
 
-        evicted_tag = cache_set.memory_action(tag)
-       
-        # when there is a cache miss, wait until data is retrieved before performing cache state update
-        if blocked_cycles > 0:
-            write_back_cycle = 100 if (evicted_tag != -1 and cache_state[evicted_tag] == MODIFIED) else 0 
-            self.has_deferred_action = True
-            self.deferred_action = (tag, set_index, next_state, bus_txn, evicted_tag, write_back_cycle) 
-        else:
-            # if cache hit, no need to evict a block
-            assert evicted_tag == -1
+        # if there is only one other cache holding the same data,
+        # transfer the data from that cache instead of main memory
+        unique = self.bus.is_unique(block_index)
+        if unique and state == INVALID:
+            # override previous operation
+            # previous operation assumes no cache has the data
+            # if currently one other cache has the data, 
+            # should get the updated copy from that cache
+            self.has_deferred_action = False
+            self.bus.add_shared(block_index, self.pid)
+
+            # no need to block 100 cycles to retrieve from main memory
+            blocked_cycles = 0
+      
+        if self.has_deferred_action:
+            self.has_deferred_action = False
+
+            # state update
             cache_state[tag] = next_state
-            
-            if bus_txn is not None:
-                self.bus.broadcast_txn(self.pid, bus_txn, tag, set_index)
-        
-        self.block_for(blocked_cycles)
+            self.bus.add_shared(block_index, self.pid)
 
-    def deferred_cache_update(self):
-        tag, set_index, next_state, bus_txn, evicted_tag, write_back_cycle = self.deferred_action
-        block_index = self.get_block_index(tag, set_index)
-        self.has_deferred_action = False
-        self.deferred_action = ()
-        self.cache_states[set_index][tag] = next_state
-        self.bus.add_shared(block_index, self.pid)
+            evicted_tag = cache_set.memory_action(tag)
+            if evicted_tag != -1:
+                if cache_state[evicted_tag] == MODIFIED:
+                    self.block_for(100)
+                self.cache_states[set_index].pop(evicted_tag)
+                evicted_block_index = self.get_block_index(evicted_tag, set_index)
+                self.bus.remove_shared(evicted_block_index, self.pid)
+       
+        else:
+            # cache miss
+            if blocked_cycles > 0:
+                self.has_deferred_action = True
+                self.block_for(blocked_cycles) 
+                generate_bus_txn = False
 
-        if evicted_tag != -1:
-            # remove block from cache state
-            self.cache_states[set_index].pop(evicted_tag)
+            # cache hit
+            else:   
+                # no eviction of block for cache hit
+                cache_set.memory_action(tag)
+                cache_state[tag] = next_state
 
-            # remove evicted block from bus shared_line
-            evicted_block_index = self.get_block_index(evicted_tag, set_index)
-            self.bus.remove_shared(evicted_block_index, self.pid)
-
-        if bus_txn is not None:
+        if generate_bus_txn and bus_txn is not None:
             self.bus.broadcast_txn(self.pid, bus_txn, tag, set_index)
-        self.block_for(write_back_cycle)
+                   
+        return blocked_cycles > 0
 
     def bus_update(self, txn_type, tag, set_index):
         cache_state = self.cache_states[set_index]
