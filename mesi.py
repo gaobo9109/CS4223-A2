@@ -44,6 +44,7 @@ class MESICache(Cache):
         self.state_machine = STATE_MACHINE
         self.initial_state = INVALID
         self.has_deferred_action = False
+        self.cache_transfer_cycle = self.block_size // 4 * 2
 
     def bus_txn_generated(self, action, addr):
         tag, set_index = self.split_addr(addr)

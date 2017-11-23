@@ -60,10 +60,11 @@ class Bus:
             data_access = cache.bus_update(txn_type, tag, set_index)
             if data_access == 'modified' or data_access == 'exclusive':
                 is_private = True
-            elif data_access == 'shared':
+            elif data_access == 'shared' or data_access == 'shared_clean' or data_access == 'shared_modified':
                 is_shared = True
 
         if is_private: 
             self.caches[source].data_access[0] += 1
         if is_shared: 
             self.caches[source].data_access[1] += 1
+

@@ -1,6 +1,6 @@
 from processor import Processor
 from mesi import MESICache
-# from dragon import DragonCache
+from dragon import DragonCache
 from bus import Bus
 import time
 
@@ -122,9 +122,11 @@ class Simulator:
         print("Total number of updates (cache-to-cache) : {}").format(self.bus.updates)
 
 
-sim = Simulator('MESI', 'bodytrack', 4096, 2, 32)
-sim.run()
-sim.print_results()
+# sim = Simulator('MESI', 'bodytrack', 4096, 2, 32)
+# sim.run()
+# sim.print_results()
 
                 
-
+sim = Simulator('DRAGON', 'bodytrack', 4096, 2, 32)
+sim.run()
+sim.print_results()
