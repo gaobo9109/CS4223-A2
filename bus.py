@@ -18,6 +18,14 @@ class Bus:
         else:
             return False
 
+    def is_modified(self, tag, set_index, pid):
+        for cache in self.caches:
+            if cache.pid == pid:
+                continue
+            if tag in cache.cache_states[set_index] and cache.cache_states[set_index][tag] == 'modified':
+                return True
+        return False
+
     def add_shared(self, key, pid):
         if key in self.shared_data:
             self.shared_data[key].add(pid)
@@ -67,4 +75,3 @@ class Bus:
             self.caches[source].data_access[0] += 1
         if is_shared: 
             self.caches[source].data_access[1] += 1
-

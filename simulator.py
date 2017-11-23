@@ -122,11 +122,11 @@ class Simulator:
         print("Total number of updates (cache-to-cache) : {}").format(self.bus.updates)
 
 
-# sim = Simulator('MESI', 'bodytrack', 4096, 2, 32)
+
+# sim = Simulator('MESI', 'blackscholes', 4096, 2, 32)
 # sim.run()
 # sim.print_results()
-
-                
-sim = Simulator('DRAGON', 'bodytrack', 4096, 2, 32)
+           
+sim = Simulator('DRAGON', 'blackscholes', 4096, 2, 32)
 sim.run()
 sim.print_results()

@@ -105,7 +105,8 @@ class MESICache(Cache):
 
             # if there is only one other cache holding the same data,
             # transfer the data from that cache instead of main memory
-            unique = self.bus.is_unique(block_index)
+            # the second condition for unique is commented out to simulate the optimized version
+            unique = self.bus.is_unique(block_index) #and self.bus.is_modified(tag, set_index, self.pid)
             if unique and state == INVALID:
                 self.bus.updates += 1
                 # print("unique found!")
@@ -147,23 +148,16 @@ class MESICache(Cache):
         block_index = self.get_block_index(tag, set_index)       
         if tag in cache_state:
             curr_state = cache_state[tag]
-            # print("Dinosaur {}'s current state is {}").format(self.pid, curr_state)
 
             if curr_state != INVALID:
                 next_state, block_bus, write_back_cycle = self.state_machine[curr_state][txn_type]
                 cache_state[tag] = next_state
                 self.block_for(write_back_cycle)
 
-                if next_state != SHARED:
-                    evicted_tag = cache_set.invalidate(tag)
+                if next_state == INVALID:
                     self.bus.invalidations += 1
-                    if evicted_tag != -1:
-                        if cache_state[evicted_tag] == MODIFIED:
-                            self.block_for(100)
-                        self.cache_states[set_index].pop(evicted_tag)
-                        evicted_block_index = self.get_block_index(evicted_tag, set_index)
-                        self.bus.remove_shared(evicted_block_index, self.pid)
-                    # print("invalidated and evicted from cache {}").format(self.pid)
+                    self.bus.remove_shared(block_index, self.pid)
+                    
                 return curr_state
 
         return INVALID    
