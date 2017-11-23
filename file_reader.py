@@ -15,5 +15,5 @@ def read_instruction(input_file, processor_id):
             instruction = [int(num, 0) for num in line.split()]
             instructions.append(instruction)
 
-    print("done reading file {}".format(processor_id))
+    print("Done reading file {}".format(processor_id))
     return instructions

@@ -4,6 +4,9 @@ class Bus:
         self.is_unique_data = {}
         self.caches = caches
         self.blocked_cycle = 0
+        self.updates = 0
+        self.invalidations = 0
+        self.data_traffic = 0
 
     def is_shared(self, key):
         return key in self.shared_data
@@ -18,7 +21,8 @@ class Bus:
     def add_shared(self, key, pid):
         if key in self.shared_data:
             self.shared_data[key].add(pid)
-            self.is_unique_data[key] = False
+            if len(self.shared_data[key]) > 1:
+                self.is_unique_data[key] = False
         else:
             self.shared_data[key] = set()
             self.shared_data[key].add(pid)
@@ -28,7 +32,9 @@ class Bus:
         if key in self.shared_data:
             if pid in self.shared_data[key]:
                 self.shared_data[key].remove(pid)
-            if len(self.shared_data[key]) == 0:
+            if len(self.shared_data[key]) == 1:
+                self.is_unique_data[key] = True
+            elif len(self.shared_data[key]) == 0:
                 self.shared_data.pop(key)
                 self.is_unique_data.pop(key)
 
@@ -44,12 +50,20 @@ class Bus:
             return True
 
     def broadcast_txn(self, source, txn_type, tag, set_index):
+        is_private = False
+        is_shared = False
+
         for cache in self.caches:
             if cache.pid == source:
                 continue
 
-            blocked_cycle = cache.bus_update(txn_type, tag, set_index)
-            self.block_for(blocked_cycle)
+            data_access = cache.bus_update(txn_type, tag, set_index)
+            if data_access == 'modified' or data_access == 'exclusive':
+                is_private = True
+            elif data_access == 'shared':
+                is_shared = True
 
-
-
+        if is_private: 
+            self.caches[source].data_access[0] += 1
+        if is_shared: 
+            self.caches[source].data_access[1] += 1

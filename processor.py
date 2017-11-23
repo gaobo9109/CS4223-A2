@@ -9,6 +9,7 @@ class Processor:
         self.finished = False
         self.pid = processor_id
         self.blocked_cycle = 0
+        self.cycles = [0, 0, 0, -1]
 
     def tick(self):
         if self.blocked_cycle == 0 or self.blocked_cycle == 1:
@@ -20,12 +21,12 @@ class Processor:
 
     def execute_instr(self):
         if self.instr_index >= self.instr_count:
-            print("processor {} is done".format(self.pid))
+            print("Processor {} is done".format(self.pid))
             self.finished = True
             return None
 
         label, value = self.instr[self.instr_index]
-        print("processor {} is at instruction {}".format(self.pid, self.instr_index))
+        # print("processor {} is at instruction {}".format(self.pid, self.instr_index))
         self.instr_index += 1
 
         return label, value

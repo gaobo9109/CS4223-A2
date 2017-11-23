@@ -25,9 +25,12 @@ class CacheSet:
         return evicted_tag
 
     def invalidate(self, tag):
+        evicted_tag = -1
         if tag in self.members:
             idx = self.members.index(tag)
             self.bring_to_back(idx)
+            evicted_tag = self.members.pop()
+        return evicted_tag
 
 
 class Cache:
@@ -40,13 +43,20 @@ class Cache:
         self.cache_states = [{} for i in range(self.num_set)]
         self.cache_sets = [CacheSet(associativity, i) for i in range(self.num_set)]
         self.blocked_cycle = 0
+        self.data_access = [0 for i in range(2)]
+        self.idle_cycles = 0
+        self.data_miss = 0
 
     def tick(self):
-        if self.blocked_cycle == 0 or self.blocked_cycle == 1:
+        if self.blocked_cycle == 0:
+            return False
+        elif self.blocked_cycle == 1:
             self.blocked_cycle = 0
+            self.idle_cycles += 1
             return False
         else:
             self.blocked_cycle -= 1
+            self.idle_cycles += 1
             return True
 
     def block_for(self, num_cycle):
